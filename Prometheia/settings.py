@@ -35,8 +35,14 @@ if ALLOWED_HOSTS_ENV:
     # Expects a comma-separated string like "localhost,127.0.0.1,.ngrok-free.app"
     ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS_ENV.split(',')]
 elif DEBUG:
-    # Default to localhost for local development if not specified
-    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+    # In debug mode, default to localhost and common ngrok domains for convenience.
+    # This makes local testing with ngrok easier without needing to edit .env for every new domain.
+    ALLOWED_HOSTS = [
+        'localhost',
+        '127.0.0.1',
+        '.ngrok-free.app',
+        '.ngrok-free.dev',
+    ]
 
 
 # Application definition

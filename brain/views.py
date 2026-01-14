@@ -21,6 +21,10 @@ def github_webhook(request):
     if not signature:
         return JsonResponse({'status': 'error', 'message': 'Missing X-Hub-Signature-256 header.'}, status=401)
 
+    # Add a check for an empty body to provide a clearer error.
+    if not request.body:
+        return JsonResponse({'status': 'error', 'message': 'Request body is empty. Ensure webhook is configured to send a JSON payload.'}, status=400)
+
     try:
         payload = json.loads(request.body)
         repo_full_name = payload.get('repository', {}).get('full_name')
@@ -37,6 +41,18 @@ def github_webhook(request):
     if not verify_github_webhook(request.body, signature, repository.webhook_secret):
         return JsonResponse({'status': 'error', 'message': 'Signature verification failed.'}, status=403)
 
-    # TODO: Parse the payload to extract commit information.
-    # TODO: Trigger the AI council evaluation for the new commit(s) via Celery.
-    return JsonResponse({'status': 'accepted', 'message': 'Webhook received and verified. Processing will occur asynchronously.'}, status=202)
+    # 2. Handle different event types from GitHub.
+    event_type = request.headers.get('X-GitHub-Event')
+
+    if event_type == 'ping':
+        # The 'ping' event is sent when the webhook is first created.
+        return JsonResponse({'status': 'success', 'message': 'Webhook ping successful.'})
+
+    if event_type == 'push':
+        # This is the main event we care about.
+        # TODO: Parse the payload to extract commit information.
+        # TODO: Trigger the AI council evaluation for the new commit(s) via Celery.
+        return JsonResponse({'status': 'accepted', 'message': 'Push event received and verified. Processing will occur asynchronously.'}, status=202)
+
+    # Acknowledge other events but do nothing with them.
+    return JsonResponse({'status': 'ignored', 'message': f'Webhook for event "{event_type}" received but not processed.'})
