@@ -4,7 +4,6 @@ import json
 
 from .models import Repository
 from .services.github_webhook_handler import verify_github_webhook
-from .services.github_webhook_handler import verify_github_webhook, process_push_event
 
 
 @csrf_exempt
@@ -52,13 +51,8 @@ def github_webhook(request):
     if event_type == 'push':
         # This is the main event we care about.
         # TODO: Parse the payload to extract commit information.
-        # This is the main event we care about. We parse the payload to create CommitLog entries.
-        processed_count = process_push_event(repository, payload)
-        
         # TODO: Trigger the AI council evaluation for the new commit(s) via Celery.
         return JsonResponse({'status': 'accepted', 'message': 'Push event received and verified. Processing will occur asynchronously.'}, status=202)
-        message = f"Push event received and verified. Found {processed_count} new commit(s). Processing will occur asynchronously."
-        return JsonResponse({'status': 'accepted', 'message': message}, status=202)
 
     # Acknowledge other events but do nothing with them.
     return JsonResponse({'status': 'ignored', 'message': f'Webhook for event "{event_type}" received but not processed.'})
