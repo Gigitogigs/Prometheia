@@ -16,8 +16,13 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.http import HttpResponse
 
 urlpatterns = [
+    # A simple placeholder homepage to land on after a successful login.
+    path('', lambda request: HttpResponse("<h1>Welcome to Prometheia</h1><p>Login successful. You can now proceed with API testing.</p>"), name='home'),
+
     path('admin/', admin.site.urls),
     path('api/', include('brain.urls')),
+    path('accounts/', include('allauth.urls')),
 ]

@@ -50,6 +50,7 @@ class CommitLog(models.Model):
     Critically, it saves the 'raw_diff' so you can re-run AI judging if the demo crashes.
     """
     repository = models.ForeignKey(Repository, on_delete=models.CASCADE, related_name='commits')
+    author = models.ForeignKey(UserProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='commits')
     
     # GitHub Data
     commit_hash = models.CharField(max_length=40, unique=True, db_index=True)
