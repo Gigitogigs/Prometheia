@@ -61,6 +61,8 @@ INSTALLED_APPS = [
     'allauth.account',
     'allauth.socialaccount',
     'allauth.socialaccount.providers.github',
+    'django_celery_results',
+    'django_celery_beat',
 ]
 
 MIDDLEWARE = [
@@ -171,3 +173,11 @@ GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 OPIK_API_KEY = os.getenv('OPIK_API_KEY')
 OPIK_WORKSPACE = os.getenv('OPIK_WORKSPACE')
+
+#Celery Configuration Options
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = "django-db"
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'

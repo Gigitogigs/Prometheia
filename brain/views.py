@@ -15,6 +15,7 @@ from .models import Repository, UserProfile, CommitLog
 from .services.github_webhook_handler import verify_github_webhook
 from .services.github_client import create_repository_webhook, GitHubAPIError
 from .serializers import RepositoryCreateSerializer
+from .tasks import evaluate_commit_with_ai
 
 
 logger = logging.getLogger(__name__)
@@ -108,8 +109,8 @@ def github_webhook(request):
                 logger.warning(f"Received commit from user '{author_username}' who is not registered. Skipping commit {commit_hash}.")
                 continue
 
-            # Create the proper CommitLog entry
-            CommitLog.objects.create(
+            # Create the CommitLog entry and trigger the background task
+            new_commit_log = CommitLog.objects.create(
                 repository=repository,
                 author=author_profile,
                 commit_hash=commit_hash,
@@ -118,9 +119,9 @@ def github_webhook(request):
                 url=commit_data.get('url')
             )
             print(f"New Commit Found: {commit_hash}")
-            print(f"  - Message: {commit_data.get('message')}")
-            print(f"  - By: {author_username}")
-        # TODO: Trigger the AI council evaluation for the new commit(s) via Celery.
+            print(f"  - Queuing for AI evaluation (CommitLog ID: {new_commit_log.id})")
+            evaluate_commit_with_ai.delay(new_commit_log.id)
+
         return JsonResponse({'status': 'accepted', 'message': 'Push event received and verified. Processing will occur asynchronously.'}, status=202)
 
     # Acknowledge other events but do nothing with them.
