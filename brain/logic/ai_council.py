@@ -3,12 +3,12 @@ import opik
 import os
 import json
 import google.generativeai as genai
-from opik import configure
-from opik.integrations.genai import track_genai
 
-# Instrument the Google GenAI library to capture LLM traces automatically
-track_genai()
-opik.configure(use_local=False)
+# Configure Opik for tracing
+try:
+    opik.configure(use_local=False)
+except Exception as e:
+    print(f"Warning: Could not configure Opik: {e}")
 
 from brain.models import JudgeEvaluation
 
