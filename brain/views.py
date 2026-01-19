@@ -118,8 +118,8 @@ def github_webhook(request):
                 timestamp=commit_data.get('timestamp'),
                 url=commit_data.get('url')
             )
-            print(f"New Commit Found: {commit_hash}")
-            print(f"  - Queuing for AI evaluation (CommitLog ID: {new_commit_log.id})")
+            logger.info(f"New commit '{commit_hash[:7]}' found for repo '{repository.full_name}'.")
+            logger.info(f"Queuing for AI evaluation (CommitLog ID: {new_commit_log.id})")
             evaluate_commit_with_ai.delay(new_commit_log.id)
 
         return JsonResponse({'status': 'accepted', 'message': 'Push event received and verified. Processing will occur asynchronously.'}, status=202)
@@ -137,40 +137,48 @@ class RepositoryWebhookCreateView(APIView):
     3. Create a new webhook on the specified repository.
     4. Store the repository details and the webhook secret in the database.
     """
-    permission_classes = [IsAuthenticated]
+    # The permission class is now set globally in settings.py under REST_FRAMEWORK.
+    # This keeps views cleaner and ensures consistent policy.
+    # permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
         serializer = RepositoryCreateSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        repo_name = serializer.validated_data['repo_name']
-        user = request.user
-
+        # --- Step 1: Get the Social Account, which is the source of truth. ---
         try:
-            # Get user's GitHub social account to find the owner's username
-            github_account = SocialAccount.objects.get(user=user, provider='github')
-            owner = github_account.extra_data.get('login')
-            if not owner:
-                return Response(
-                    {'error': 'Could not determine GitHub username from your social account.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Get user's GitHub OAuth token
-            social_token = SocialToken.objects.get(account=github_account)
-            user_github_token = social_token.token
+            user = request.user
+            github_account = user.socialaccount_set.get(provider='github')
         except SocialAccount.DoesNotExist:
             return Response(
-                {'error': 'GitHub social account not linked. Please connect your GitHub account.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        except SocialToken.DoesNotExist:
-            return Response(
-                {'error': 'GitHub token not found. Please try reconnecting your GitHub account.'},
+                {'error': f"The authenticated user '{user.username}' does not have a GitHub social account linked. Please log in with GitHub first."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # --- Step 2: Ensure UserProfile exists, creating it lazily if needed. ---
+        # This is more robust than relying only on the signup signal.
+        github_username = github_account.extra_data.get('login')
+        avatar_url = github_account.extra_data.get('avatar_url')
+        user_profile, created = UserProfile.objects.get_or_create(
+            user=user,
+            defaults={'github_username': github_username, 'avatar_url': avatar_url}
+        )
+        if created:
+            logger.info(f"Lazily created UserProfile for user '{user.username}'.")
+
+        # --- Step 3: Get the GitHub OAuth token. ---
+        try:
+            social_token = SocialToken.objects.get(account=github_account)
+            user_github_token = social_token.token
+        except SocialToken.DoesNotExist:
+            return Response(
+                {'error': f"A GitHub OAuth token was not found for user '{user.username}'. Please try revoking app access on GitHub and logging in again to grant the correct permissions."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        repo_name = serializer.validated_data['repo_name']
+        owner = user_profile.github_username
         repo_full_name = f"{owner}/{repo_name}"
         if Repository.objects.filter(full_name=repo_full_name).exists():
             return Response(
@@ -191,9 +199,6 @@ class RepositoryWebhookCreateView(APIView):
             )
         except GitHubAPIError as e:
             return Response({'error': 'Failed to create GitHub webhook.', 'details': e.message}, status=e.status_code)
-
-        # Ensure a UserProfile exists before creating the Repository
-        user_profile, _ = UserProfile.objects.get_or_create(user=user, defaults={'github_username': owner})
 
         Repository.objects.create(
             owner=user_profile,

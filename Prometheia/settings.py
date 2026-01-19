@@ -54,13 +54,14 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'brain',
+    'brain.apps.BrainConfig', # Use AppConfig to load signals
     'rest_framework',
+    'rest_framework.authtoken', # For token-based authentication
     'corsheaders',
     'allauth',
     'allauth.account',
     'allauth.socialaccount',
-    'allauth.socialaccount.providers.github',
+    'allauth.socialaccount.providers.github', # Add this back to ensure the provider is always discovered
     'django_celery_results',
     'django_celery_beat',
 ]
@@ -136,20 +137,26 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-SITE_ID = 1
-LOGIN_REDIRECT_URL ='/'
-LOGOUT_REDIRECT_URL ='/'
-
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
     'allauth.account.auth_backends.AuthenticationBackend',
 ]
 
+SITE_ID = 1
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/'
+
 ACCOUNT_EMAIL_REQUIRED = True
 ACCOUNT_VERIFICATION = 'optional'
 
-GITHUB_CLIENT_ID = os.getenv('GITHUB_CLIENT_ID')
-GITHUB_CLIENT_SECRET = os.getenv('GITHUB_CLIENT_SECRET')
+SOCIALACCOUNT_PROVIDERS = {
+    'github': {
+        'SCOPE': [
+            'user:email',
+            'repo',
+        ],
+    }
+}
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
@@ -181,3 +188,30 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+
+# Django Rest Framework Configuration
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        # Keep SessionAuthentication for browser access (e.g., admin)
+        'rest_framework.authentication.SessionAuthentication',
+        # Add TokenAuthentication for API clients
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ]
+}
+
+#Opik configuration
+OPIK_API_KEY=os.getenv('OPIK_API_KEY')
+OPIK_WORKSPACE=os.getenv('OPIK_WORKSPACE', 'default')
+OPIK_ENABLED=os.getenv('OPIK_ENABLED', 'True') == 'True'
+
+#initialize Opik only if enabled
+if OPIK_ENABLED and OPIK_API_KEY:
+    import opik
+    opik.configure(
+        api_key=OPIK_API_KEY,
+        workspace=OPIK_WORKSPACE
+    )
