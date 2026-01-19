@@ -43,82 +43,78 @@ def github_webhook(request):
     if request.method != 'POST':
         return HttpResponse("This endpoint is for GitHub webhooks (POST requests only).", status=405)
 
-    # It's good practice to get the IP address for logging purposes.
-    # Note: In a production environment behind a proxy, you might need to check
-    # request.META.get('HTTP_X_FORWARDED_FOR').
     ip_address = request.META.get('REMOTE_ADDR')
-
-    # 1. Verify the signature from GitHub for security.
     signature = request.headers.get('X-Hub-Signature-256')
+    event_type = request.headers.get('X-GitHub-Event')
+
+    log_extra = {
+        'ip_address': ip_address,
+        'event_type': event_type,
+    }
+
     if not signature:
-        logger.warning("Webhook received without X-Hub-Signature-256 header from IP: %s", ip_address)
+        logger.warning("Webhook received without X-Hub-Signature-256 header", extra=log_extra)
         return JsonResponse({'status': 'error', 'message': 'Missing X-Hub-Signature-256 header.'}, status=400)
 
-    # Add a check for an empty body to provide a clearer error.
     if not request.body:
+        logger.warning("Webhook received with empty body", extra=log_extra)
         return JsonResponse({'status': 'error', 'message': 'Request body is empty. Ensure webhook is configured to send a JSON payload.'}, status=400)
 
     try:
         payload = json.loads(request.body)
         repo_full_name = payload.get('repository', {}).get('full_name')
+        log_extra['repo_full_name'] = repo_full_name
         if not repo_full_name:
-            logger.warning("Webhook payload from IP %s is missing repository.full_name.", ip_address)
+            logger.warning("Webhook payload missing repository.full_name", extra=log_extra)
             return JsonResponse({'status': 'error', 'message': 'Invalid payload: repository.full_name missing.'}, status=400)
     except json.JSONDecodeError:
-        logger.warning("Invalid JSON payload received from IP: %s", ip_address)
+        logger.warning("Invalid JSON payload received", extra=log_extra)
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON payload.'}, status=400)
 
     try:
         repository = Repository.objects.get(full_name=repo_full_name, is_active=True)
     except Repository.DoesNotExist:
-        logger.warning(
-            "Webhook received for untracked or inactive repository '%s' from IP: %s",
-            repo_full_name,
-            ip_address
-        )
+        logger.warning("Webhook received for untracked or inactive repository", extra=log_extra)
         return JsonResponse({'status': 'error', 'message': f'Repository "{repo_full_name}" not configured or is inactive.'}, status=404)
 
     if not verify_github_webhook(request.body, signature, repository.webhook_secret):
-        logger.warning(
-            "GitHub webhook signature verification failed for repo '%s' from IP: %s",
-            repo_full_name,
-            ip_address
-        )
+        logger.warning("GitHub webhook signature verification failed", extra=log_extra)
         return JsonResponse({'status': 'error', 'message': 'Signature verification failed.'}, status=403)
 
-    # 2. Handle different event types from GitHub.
-    event_type = request.headers.get('X-GitHub-Event')
-
     if event_type == 'ping':
-        # The 'ping' event is sent when the webhook is first created.
+        logger.info("Webhook ping successful", extra=log_extra)
         return JsonResponse({'status': 'success', 'message': 'Webhook ping successful.'})
 
     if event_type == 'push':
-        # This is the main event we care about.
         commits = payload.get('commits', [])
         if not commits:
+            logger.info("Push event contains no commits", extra=log_extra)
             return JsonResponse({'status': 'ignored', 'message': 'Push event contains no commits.'})        
         
         for commit_data in commits:
             commit_hash = commit_data.get('id')
-            # Avoid processing the same commit twice
+            author_username = commit_data.get('author', {}).get('username')
+
+            commit_log_extra = log_extra.copy()
+            commit_log_extra.update({
+                'commit_hash': commit_hash,
+                'author_username': author_username,
+            })
+
             if CommitLog.objects.filter(commit_hash=commit_hash).exists():
-                logger.info(f"Skipping already processed commit: {commit_hash}")
+                logger.info("Skipping already processed commit", extra=commit_log_extra)
                 continue
 
-            # Get the author of the specific commit, not the pusher of the event
-            author_username = commit_data.get('author', {}).get('username')
             if not author_username:
-                logger.warning(f"Commit {commit_hash} is missing an author username. Skipping.")
+                logger.warning("Commit is missing an author username. Skipping.", extra=commit_log_extra)
                 continue
             
             try:
                 author_profile = UserProfile.objects.get(github_username=author_username)
             except UserProfile.DoesNotExist:
-                logger.warning(f"Received commit from user '{author_username}' who is not registered. Skipping commit {commit_hash}.")
+                logger.warning("Received commit from user who is not registered. Skipping commit.", extra=commit_log_extra)
                 continue
 
-            # Create the CommitLog entry and trigger the background task
             new_commit_log = CommitLog.objects.create(
                 repository=repository,
                 author=author_profile,
@@ -127,13 +123,13 @@ def github_webhook(request):
                 timestamp=parse_datetime(commit_data.get('timestamp')),
                 url=commit_data.get('url')
             )
-            logger.info(f"New commit '{commit_hash[:7]}' found for repo '{repository.full_name}'.")
-            logger.info(f"Queuing for AI evaluation (CommitLog ID: {new_commit_log.id})")
+            commit_log_extra['commit_log_id'] = new_commit_log.id
+            logger.info("New commit found. Queuing for AI evaluation", extra=commit_log_extra)
             evaluate_commit_with_ai.delay(new_commit_log.id)
 
         return JsonResponse({'status': 'accepted', 'message': 'Push event received and verified. Processing will occur asynchronously.'}, status=202)
 
-    # Acknowledge other events but do nothing with them.
+    logger.info("Webhook for unhandled event received", extra=log_extra)
     return JsonResponse({'status': 'ignored', 'message': f"Webhook for event '{event_type}' received but not processed."})
 
 
