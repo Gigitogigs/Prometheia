@@ -1,13 +1,10 @@
-import React from "react"
+import React from "react";
 import type { Metadata, Viewport } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/next';
 import { QueryProvider } from '@/components/providers/query-provider';
 import { Navbar } from '@/components/layout/navbar';
+import { AuthSync } from '@/components/auth/auth-sync';
 import './globals.css';
-
-const _geist = Geist({ subsets: ['latin'] });
-const _geistMono = Geist_Mono({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'CodeXP - Gamified Developer Dashboard',
@@ -16,18 +13,9 @@ export const metadata: Metadata = {
   generator: 'v0.app',
   icons: {
     icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
+      { url: '/icon-light-32x32.png', media: '(prefers-color-scheme: light)' },
+      { url: '/icon-dark-32x32.png', media: '(prefers-color-scheme: dark)' },
+      { url: '/icon.svg', type: 'image/svg+xml' },
     ],
     apple: '/apple-icon.png',
   },
@@ -46,14 +34,78 @@ export default function RootLayout({
     <html lang="en">
       <body className="font-sans antialiased">
         <QueryProvider>
+          {/* Sync auth state across tabs */}
+          <AuthSync />
+
+          {/* Navbar + page content */}
           <Navbar />
           <main className="min-h-[calc(100vh-4rem)]">{children}</main>
         </QueryProvider>
+
+        {/* Vercel analytics */}
         <Analytics />
       </body>
     </html>
   );
 }
+
+
+// import React from "react"
+// import type { Metadata, Viewport } from 'next';
+// import { Geist, Geist_Mono } from 'next/font/google';
+// import { Analytics } from '@vercel/analytics/next';
+// import { QueryProvider } from '@/components/providers/query-provider';
+// import { Navbar } from '@/components/layout/navbar';
+// import './globals.css';
+
+// const _geist = Geist({ subsets: ['latin'] });
+// const _geistMono = Geist_Mono({ subsets: ['latin'] });
+
+// export const metadata: Metadata = {
+//   title: 'CodeXP - Gamified Developer Dashboard',
+//   description:
+//     'Track your GitHub contributions, earn XP, and climb the leaderboard with AI-powered code evaluation.',
+//   generator: 'v0.app',
+//   icons: {
+//     icon: [
+//       {
+//         url: '/icon-light-32x32.png',
+//         media: '(prefers-color-scheme: light)',
+//       },
+//       {
+//         url: '/icon-dark-32x32.png',
+//         media: '(prefers-color-scheme: dark)',
+//       },
+//       {
+//         url: '/icon.svg',
+//         type: 'image/svg+xml',
+//       },
+//     ],
+//     apple: '/apple-icon.png',
+//   },
+// };
+
+// export const viewport: Viewport = {
+//   themeColor: '#0d0f14',
+// };
+
+// export default function RootLayout({
+//   children,
+// }: Readonly<{
+//   children: React.ReactNode;
+// }>) {
+//   return (
+//     <html lang="en">
+//       <body className="font-sans antialiased">
+//         <QueryProvider>
+//           <Navbar />
+//           <main className="min-h-[calc(100vh-4rem)]">{children}</main>
+//         </QueryProvider>
+//         <Analytics />
+//       </body>
+//     </html>
+//   );
+// }
 
 
 

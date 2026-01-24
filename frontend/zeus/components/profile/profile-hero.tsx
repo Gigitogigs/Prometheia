@@ -19,7 +19,7 @@ export function ProfileHero({ user }: ProfileHeroProps) {
   return (
     <section className="relative overflow-hidden rounded-2xl border border-border/50 bg-card/80 backdrop-blur-xl">
       {/* Background gradient effect */}
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#7000ff]/10 via-transparent to-[#00f2ff]/10" />
+      <div className="pointer-events-none absolute inset-0 bg-linear-to-br from-[#7000ff]/10 via-transparent to-[#00f2ff]/10" />  {/*bg-gradient-to-br */}
       <div className="pointer-events-none absolute -top-24 -right-24 h-48 w-48 rounded-full bg-[#7000ff]/20 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-24 -left-24 h-48 w-48 rounded-full bg-[#00f2ff]/20 blur-3xl" />
 
@@ -28,7 +28,7 @@ export function ProfileHero({ user }: ProfileHeroProps) {
         <div className="flex flex-col items-center gap-6 lg:flex-row lg:items-start lg:gap-8">
           {/* Avatar with glow */}
           <div className="relative shrink-0">
-            <div className="absolute -inset-1 rounded-full bg-gradient-to-br from-[#7000ff] to-[#00f2ff] opacity-50 blur-md" />
+            <div className="absolute -inset-1 rounded-full bg-linear-to-br from-[#7000ff] to-[#00f2ff] opacity-50 blur-md" />  {/*bg-gradient-to-br */}
             <Image
               src={
                 user.avatar_url ||
@@ -54,7 +54,7 @@ export function ProfileHero({ user }: ProfileHeroProps) {
               <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
                 {user.github_username}
               </h1>
-              <LevelBadge level={user.current_level} size="lg" />
+               <LevelBadge level={user.current_level} /> {/* size="lg" /> */}
             </div>
 
             {/* Title */}
@@ -81,7 +81,7 @@ export function ProfileHero({ user }: ProfileHeroProps) {
                 currentXP={xpInCurrentLevel}
                 xpToNextLevel={user.xp_to_next_level}
                 showLabels={false}
-                size="lg"
+                // size="lg"
               />
               <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
                 <span>{xpInCurrentLevel.toLocaleString()} XP</span>
