@@ -64,13 +64,13 @@ export function Navbar() {
         {/* Right-side GitHub / Auth */}
         <div>
           {!user ? (
-            <Link
-              href="/http://localhost:8000/accounts/github/login/"
-              className="flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700"
-            >
-              <Github className="h-4 w-4" />
-              <span className="hidden sm:inline">Login with GitHub</span>
-            </Link>
+            <a
+                href="http://localhost:8000/accounts/github/login/"
+                className="flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700"
+              >
+                <Github className="h-4 w-4" />
+                <span className="hidden sm:inline">Login with GitHub</span>
+              </a>
           ) : (
             <div className="flex items-center gap-3">
               {user.avatar_url && (
