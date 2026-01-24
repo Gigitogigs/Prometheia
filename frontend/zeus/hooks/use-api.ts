@@ -69,3 +69,28 @@ export function useCreateRepositoryWebhook() {
     },
   });
 }
+
+// --- Session Fetch ---
+export type User = {
+  username: string;
+  avatar_url?: string;
+};
+
+export type Session = {
+  user: User | null;
+};
+
+export async function getSession(): Promise<Session> {
+  const res = await fetch('/api/session/');
+  if (!res.ok) throw new Error('Failed to fetch session');
+  return res.json(); // should return { user: User | null }
+}
+
+export function useSession() {
+  return useQuery({
+    queryKey: ['session'],
+    queryFn: getSession,
+    staleTime: Infinity,
+    refetchOnWindowFocus: true, // auto-refresh when user focuses tab
+  });
+}

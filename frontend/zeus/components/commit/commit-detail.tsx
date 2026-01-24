@@ -13,11 +13,10 @@ import {
   Clock,
   ArrowLeft,
   AlertCircle,
-  User,
   Scale,
   Loader2,
 } from 'lucide-react';
-import type { CommitLogDetail, JudgeEvaluation, CommitLog } from '@/types/api';
+import type { CommitLogDetail, JudgeEvaluation } from '@/types/api';
 
 interface CommitDetailProps {
   hash: string;

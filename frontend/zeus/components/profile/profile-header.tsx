@@ -22,10 +22,16 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
             height={96}
             className="rounded-full ring-2 ring-primary/30"
           />
-          <RankBadge
-            rank={user.rank}
+          {user.rank !== null && (
+            <RankBadge
+              rank={user.rank}
+              className="absolute -bottom-2 -right-2 h-10 w-10"
+            />
+          )}
+          {/* <RankBadge
+            rank={user.rank ?? 0}
             className="absolute -bottom-2 -right-2 h-10 w-10"
-          />
+          /> */}
         </div>
 
         {/* User Info */}
