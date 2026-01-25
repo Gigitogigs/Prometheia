@@ -12,12 +12,29 @@ const API_BASE =
 export const api = {
   // GET /api/leaderboard/
   getLeaderboard: async (
-    page = 1
-  ): Promise<{ results: UserProfile[]; count: number }> => {
-    const res = await fetch(`${API_BASE}/leaderboard/?page=${page}`);
-    if (!res.ok) throw new Error('Failed to fetch leaderboard');
-    return res.json();
-  },
+  params: LeaderboardParams = {}
+): Promise<PaginatedResponse<UserProfile>> => {
+  const searchParams = new URLSearchParams();
+
+  if (params.page) searchParams.set('page', String(params.page));
+  if (params.page_size) searchParams.set('page_size', String(params.page_size));
+  if (params.min_level) searchParams.set('min_level', String(params.min_level));
+
+  const res = await fetch(`${API_BASE}/leaderboard/?${searchParams.toString()}`);
+
+  if (!res.ok) {
+    throw new Error('Failed to fetch leaderboard');
+  }
+
+  return res.json();
+},
+  // getLeaderboard: async (
+  //   page = 1
+  // ): Promise<{ results: UserProfile[]; count: number }> => {
+  //   const res = await fetch(`${API_BASE}/leaderboard/?page=${page}`);
+  //   if (!res.ok) throw new Error('Failed to fetch leaderboard');
+  //   return res.json();
+  // },
 
   // GET /api/commits/
   getCommits: async (

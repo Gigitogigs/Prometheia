@@ -1,5 +1,3 @@
-// types/api.ts
-
 export type JudgeType = 'ARCHITECT' | 'PALADIN' | 'SCRIBE';
 
 export interface JudgeEvaluation {
