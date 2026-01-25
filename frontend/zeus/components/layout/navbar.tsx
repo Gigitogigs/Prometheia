@@ -57,13 +57,25 @@ export function Navbar() {
           {isLoading ? (
             <AuthSkeleton />
           ) : !user ? (
-            <a
-              href={`${process.env.NEXT_PUBLIC_API_URL}${process.env.NEXT_PUBLIC_GITHUB_LOGIN_PATH}`}
-              className="flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
-            >
-              <Github className="h-4 w-4" />
-              Login with GitHub
-            </a>
+            <form
+                method="POST"
+                action={`${process.env.NEXT_PUBLIC_API_URL}${process.env.NEXT_PUBLIC_GITHUB_LOGIN_PATH}`}
+              >
+                <button
+                  type="submit"
+                  className="flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
+                >
+                  <Github className="h-4 w-4" />
+                  Login with GitHub
+                </button>
+              </form>
+            // <a
+            //   href={`${process.env.NEXT_PUBLIC_API_URL}${process.env.NEXT_PUBLIC_GITHUB_LOGIN_PATH}`}
+            //   className="flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
+            // >
+            //   <Github className="h-4 w-4" />
+            //   Login with GitHub
+            // </a>
           ) : (
             <div className="flex items-center gap-3">
               <Image
