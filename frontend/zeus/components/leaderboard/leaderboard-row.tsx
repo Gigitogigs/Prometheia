@@ -20,7 +20,8 @@ export function LeaderboardRow({ user, className }: LeaderboardRowProps) {
       )}
     >
       {/* Rank */}
-      <RankBadge rank={user.rank} />
+      {user.rank !== null && <RankBadge rank={user.rank} />}
+      {/* <RankBadge rank={user.rank} /> */}
 
       {/* Avatar */}
       <Image

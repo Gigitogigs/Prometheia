@@ -4,6 +4,7 @@ import type {
   CommitLog,
   CommitLogDetail,
   PaginatedResponse,
+  LeaderboardParams,
 } from '@/types/api';
 
 const API_BASE =
