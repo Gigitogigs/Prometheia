@@ -8,6 +8,7 @@ from .views import (
     CommitDetailView,
     JudgeEvaluationListView,
     JudgeEvaluationDetailView,
+    SessionView, ConnectedReposView,
 )
 
 urlpatterns = [
@@ -42,4 +43,8 @@ urlpatterns = [
     # Judge Evaluation Detail: Full evaluation with Opik proof URL
     # GET /api/evaluations/{id}/
     path('evaluations/<int:pk>/', JudgeEvaluationDetailView.as_view(), name='evaluation_detail'),
+    
+    path("session/", SessionView.as_view(), name="api-session"),
+    # get logged in user's repos
+    path("user/repos/", ConnectedReposView.as_view(), name='users_repo'),
 ]
