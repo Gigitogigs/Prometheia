@@ -30,6 +30,7 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DJANGO_DEBUG', 'False') == 'True'
 
+
 ALLOWED_HOSTS_ENV = os.getenv('ALLOWED_HOSTS')
 if ALLOWED_HOSTS_ENV:
     # Expects a comma-separated string like "localhost,127.0.0.1,.ngrok-free.app"
@@ -43,6 +44,7 @@ elif DEBUG:
         '.ngrok-free.app',
         '.ngrok-free.dev',
     ]
+
 
 
 # Application definition
@@ -67,6 +69,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -74,12 +77,20 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
 ]
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
+    # 'http://127.0.0.1:3000',
+]
+
+CORS_ALLOW_CREDENTIALS = True
+
+
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:3000',
+    'http://localhost:3000'
 ]
 
 ROOT_URLCONF = 'Prometheia.urls'
@@ -143,7 +154,7 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 SITE_ID = 1
-LOGIN_REDIRECT_URL = '/'
+LOGIN_REDIRECT_URL = 'http://localhost:3000/leaderboard'
 LOGOUT_REDIRECT_URL = '/'
 
 ACCOUNT_EMAIL_REQUIRED = True
@@ -154,9 +165,18 @@ SOCIALACCOUNT_PROVIDERS = {
         'SCOPE': [
             'user:email',
             'repo',
+            'admin:repo_hook', # Needed to manage webhooks. Without this, GitHub will return a 404 or 403 when trying to hit the /hooks endpoint,
         ],
+        'STORE_TOKENS': True,
+        'APP': {
+            'client_id': os.getenv('GITHUB_CLIENT_ID'),
+            'secret': os.getenv('GITHUB_CLIENT_SECRET'),
+            'key': ''  # Leave empty for GitHub
+        }
     }
 }
+
+SOCIALACCOUNT_LOGIN_ON_GET = True #False in production.
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
@@ -202,6 +222,16 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ]
 }
+
+# session auth settings
+SESSION_COOKIE_NAME = "sessionid"
+SESSION_COOKIE_HTTPONLY = True
+# SESSION_COOKIE_SAMESITE = "None" # when different sites' will be done  in prod'
+SESSION_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_SECURE = False  # True in prod (HTTPS)
+
+SESSION_COOKIE_DOMAIN = None
+
 
 #Opik configuration
 OPIK_API_KEY=os.getenv('OPIK_API_KEY')
