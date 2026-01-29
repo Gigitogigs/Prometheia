@@ -1,25 +1,21 @@
+// state management
 import { useQuery } from '@tanstack/react-query';
+import { getSession, SessionResponse } from '@/lib/api/session';
 
-export type SessionUser = {
-  username: string;
-  avatar_url?: string | null;
-};
-
+/**
+ * Custom hook to manage user session.
+ * - Automatically fetches session on mount.
+ * - Refetches when window gains focus.
+ * - Stays in sync across tabs via AuthSync.
+ */
 export function useSession() {
-  return useQuery({
+  return useQuery<SessionResponse | null>({
     queryKey: ['session'],
-    queryFn: async () => {
-      const res = await fetch('/api/session/', {
-        credentials: 'include',
-      });
-
-      if (!res.ok) {
-        throw new Error('Not authenticated');
-      }
-
-      return res.json();
-    },
-    retry: false,
-    staleTime: 60_000, // 1 minute
+    queryFn: getSession,
+    staleTime: Infinity,            // never consider session stale on its own
+    refetchOnWindowFocus: true,     // refetch session if user switches tabs
+    retry: false,                   // don't retry failed session fetch
+    refetchOnReconnect: true,       // refetch if browser reconnects
   });
 }
+
