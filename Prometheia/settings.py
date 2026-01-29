@@ -45,6 +45,13 @@ elif DEBUG:
     ]
 
 
+# For secure POST requests, Django checks the Origin header.
+CSRF_TRUSTED_ORIGINS = [
+    'https://uninterleaved-cheree-merciful.ngrok-free.dev'
+]
+
+
+
 # Application definition
 
 INSTALLED_APPS = [
