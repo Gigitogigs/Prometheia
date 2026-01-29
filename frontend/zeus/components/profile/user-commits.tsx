@@ -1,3 +1,4 @@
+// Fetches user data and renders the profile page. Uses useUserCommits(username)
 'use client';
 
 import { useState } from 'react';

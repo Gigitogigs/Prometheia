@@ -59,3 +59,15 @@ export interface CommitFeedParams {
   page?: number;
   page_size?: number;
 }
+
+
+export interface Repository {
+  id: number;
+  name: string;           // repo name like "octocat/hello-world"
+  full_name: string;
+  owner: string;          // optional, if returned, has repo owner
+  is_active: boolean;
+  created_at: string;
+  // updated_at: string;
+}
+

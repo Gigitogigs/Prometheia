@@ -1,3 +1,4 @@
+// uses useUserProfile(username) to fetch API data. Fetches user data and renders the profile page.
 'use client';
 
 import Link from 'next/link';

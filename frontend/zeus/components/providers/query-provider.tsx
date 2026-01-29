@@ -1,3 +1,4 @@
+// supplies the QueryClient context to any any (useQuery/useMutation) or hooks e.g (useSession, useUserProfile, useUserCommits)
 'use client';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

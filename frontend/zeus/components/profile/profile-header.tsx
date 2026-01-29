@@ -1,3 +1,5 @@
+// compact card for listings or header.
+// provide user info summary. (Avatar + Rank badge), (username + Level badge), (XP progress bar), (Stats cards (Rank, Total XP, Streak))
 import React from "react"
 import Image from 'next/image';
 import { Flame, Trophy, Zap, TrendingUp } from 'lucide-react';

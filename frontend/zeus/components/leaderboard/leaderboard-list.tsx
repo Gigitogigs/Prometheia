@@ -1,51 +1,92 @@
 'use client';
 
-import { useState } from 'react';
-import { useLeaderboard } from '@/hooks/use-api';
+import { useState, useMemo } from 'react';
+import { useInfiniteLeaderboard } from '@/hooks/use-api';
 import { MedalCard } from './medal-card';
 import { LeaderboardRow } from './leaderboard-row';
 import { LeaderboardSkeleton } from '@/components/ui/loading-skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ChevronLeft, ChevronRight, Filter, AlertCircle } from 'lucide-react';
+import { Filter, AlertCircle } from 'lucide-react';
+import type { UserProfile, PaginatedResponse } from '@/types/api';
+import type { InfiniteData } from '@tanstack/react-query';
 
 export function LeaderboardList() {
-  const [page, setPage] = useState(1);
   const [minLevel, setMinLevel] = useState<number | undefined>();
   const [showFilters, setShowFilters] = useState(false);
 
-  const { data, isLoading, error } = useLeaderboard({
-    page,
-    page_size: 10,
+  const {
+    data,
+    status,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteLeaderboard({
     min_level: minLevel,
   });
 
-  if (isLoading) {
+  /* --------------------------------------------
+   * Explicitly type infinite data
+   * -------------------------------------------- */
+  const infiniteData = data as InfiniteData<PaginatedResponse<UserProfile>> | undefined;
+
+  /* --------------------------------------------
+   * Flatten pages
+   * -------------------------------------------- */
+  const users: UserProfile[] = useMemo(() => {
+    return infiniteData?.pages.flatMap(
+      (page: PaginatedResponse<UserProfile>) => page.results
+    ) ?? [];
+  }, [infiniteData]);
+
+  /* --------------------------------------------
+   * Top 3 (from page 1 only)
+   * -------------------------------------------- */
+  const topThree: UserProfile[] = useMemo(() => {
+    return infiniteData?.pages[0]?.results.slice(0, 3) ?? [];
+  }, [infiniteData]);
+
+  /* --------------------------------------------
+   * Remaining users
+   * -------------------------------------------- */
+  const restUsers = useMemo(() => {
+    const topUsernames = new Set(
+      topThree.map((u: UserProfile) => u.github_username)
+    );
+    return users.filter(
+      (u: UserProfile) => !topUsernames.has(u.github_username)
+    );
+  }, [users, topThree]);
+
+  /* --------------------------------------------
+   * Loading / Error states
+   * -------------------------------------------- */
+  if (status === 'pending') {
     return <LeaderboardSkeleton />;
   }
 
-  if (error || !data) {
+  if (status === 'error') {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive">
         <AlertCircle className="h-5 w-5" />
-        <span>Failed to load leaderboard.</span>
+        <span>{error?.message || 'Failed to load leaderboard.'}</span>
       </div>
     );
   }
 
-  const { results, count, next, previous } = data;
-
-  const topThree = page === 1 ? results.slice(0, 3) : [];
-  const rest = page === 1 ? results.slice(3) : results;
-
+  /* --------------------------------------------
+   * Render
+   * -------------------------------------------- */
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          {count} developers ranked
+          {users.length} developers ranked
         </div>
+
         <Button
           variant="outline"
           size="sm"
@@ -68,21 +109,17 @@ export function LeaderboardList() {
                 type="number"
                 min={1}
                 value={minLevel ?? ''}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setMinLevel(value ? Number(value) : undefined);
-                  setPage(1);
-                }}
+                onChange={(e) =>
+                  setMinLevel(e.target.value ? Number(e.target.value) : undefined)
+                }
                 className="w-32"
               />
             </div>
+
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                setMinLevel(undefined);
-                setPage(1);
-              }}
+              onClick={() => setMinLevel(undefined)}
             >
               Reset
             </Button>
@@ -99,39 +136,28 @@ export function LeaderboardList() {
         </div>
       )}
 
-      {/* List */}
+      {/* Rows */}
       <div className="space-y-2">
-        {rest.map((user) => (
-          <LeaderboardRow key={user.github_username} user={user} />
+        {restUsers.map((user: UserProfile) => (
+          <LeaderboardRow
+            key={user.github_username}
+            user={user}
+          />
         ))}
       </div>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between border-t border-border pt-4">
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!previous}
-          onClick={() => setPage((p) => Math.max(1, p - 1))}
-          className="gap-2"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Previous
-        </Button>
-
-        <span className="text-sm text-muted-foreground">Page {page}</span>
-
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!next}
-          onClick={() => setPage((p) => p + 1)}
-          className="gap-2"
-        >
-          Next
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      </div>
+      {/* Load More */}
+      {hasNextPage && (
+        <div className="flex justify-center pt-4">
+          <Button
+            variant="outline"
+            onClick={() => fetchNextPage()}
+            disabled={isFetchingNextPage}
+          >
+            {isFetchingNextPage ? 'Loading…' : 'Load more'}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

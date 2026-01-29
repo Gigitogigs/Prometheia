@@ -5,6 +5,7 @@ import { QueryProvider } from '@/components/providers/query-provider';
 import { Navbar } from '@/components/layout/navbar';
 import { AuthSync } from '@/components/auth/auth-sync';
 import './globals.css';
+import { Toaster } from "@/components/ui/sonner"
 
 export const metadata: Metadata = {
   title: 'CodeXP - Gamified Developer Dashboard',
@@ -40,6 +41,8 @@ export default function RootLayout({
           {/* Navbar + page content */}
           <Navbar />
           <main className="min-h-[calc(100vh-4rem)]">{children}</main>
+          {/* richColors makes success green and error red automatically */}
+          <Toaster richColors closeButton position="top-right" />
         </QueryProvider>
 
         {/* Vercel analytics */}

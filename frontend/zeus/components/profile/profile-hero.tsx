@@ -1,3 +1,5 @@
+// main landing/profile section with richer UI
+// provide larger hero section of the profile page. Large avatar with glow. (Username, title, level) (XP progress with gradient text) (Stats grid (Global Rank, Total XP, Current Streak, Last Commit))
 import React from "react"
 import Image from 'next/image';
 import { Flame, Trophy, Zap, TrendingUp, Calendar } from 'lucide-react';
