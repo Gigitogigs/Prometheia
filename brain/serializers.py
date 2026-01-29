@@ -226,3 +226,25 @@ class CommitLogDetailSerializer(serializers.ModelSerializer):
             'raw_diff',
             'created_at',
         ]
+        
+        
+        
+        
+        
+from rest_framework import serializers
+from django.contrib.auth.models import User
+from brain.models import UserProfile
+
+
+class SessionUserSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    avatar_url = serializers.URLField(required=False, allow_null=True)
+    
+# to get all repos for logged in user
+from rest_framework import serializers
+from brain.models import Repository
+
+class RepositorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Repository
+        fields = ['id', 'name', 'full_name', 'created_at']
