@@ -143,8 +143,8 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 SITE_ID = 1
-LOGIN_REDIRECT_URL = '/'
-LOGOUT_REDIRECT_URL = '/'
+LOGIN_REDIRECT_URL = '/leaderboard'
+LOGOUT_REDIRECT_URL = 'accounts/login'
 
 ACCOUNT_EMAIL_REQUIRED = True
 ACCOUNT_VERIFICATION = 'optional'
@@ -174,6 +174,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Third-party API Keys
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
