@@ -147,6 +147,7 @@ class RepositoryWebhookCreateView(APIView):
     # permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
+        print(f"this is the data {request.data}")
         serializer = RepositoryCreateSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -174,13 +175,19 @@ class RepositoryWebhookCreateView(APIView):
 
         # --- Step 3: Get the GitHub OAuth token. ---
         try:
-            social_token = SocialToken.objects.get(account=github_account)
+            social_token = SocialToken.objects.get(
+                account=github_account,
+                account__provider='github')
+            print(f"this is the details of social token {social_token}")
             user_github_token = social_token.token
         except SocialToken.DoesNotExist:
+            logger.error(f"Token missing for user {user.username}. Check SOCIALACCOUNT_PROVIDERS settings.")
             return Response(
-                {'error': f"A GitHub OAuth token was not found for user '{user.username}'. Please try revoking app access on GitHub and logging in again to grant the correct permissions."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+                {
+                    'error': "GitHub Permissions Missing",
+                    'details': "We don't have permission to create webhooks on your behalf. Please log out and log back in."
+                },
+                status=status.HTTP_403_FORBIDDEN)
 
         repo_name = serializer.validated_data['repo_name']
         owner = user_profile.github_username
@@ -498,3 +505,65 @@ class JudgeEvaluationDetailView(RetrieveAPIView):
     serializer_class = JudgeEvaluationSerializer
     permission_classes = []  # Public endpoint
 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
+from brain.models import UserProfile
+from brain.serializers import SessionUserSerializer
+
+class SessionView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        
+        if not request.user.is_authenticated:
+            return Response({"user": None})
+
+        # ATTEMPT TO GET OR CREATE THE PROFILE
+        # This ensures the frontend NEVER gets "null" for an authenticated user
+        profile = getattr(request.user, 'profile', None)
+        
+        if not profile:
+            # print(f" Profile missing for {request.user.username}, creating lazily...")
+            from allauth.socialaccount.models import SocialAccount
+            social_acc = SocialAccount.objects.filter(user=request.user, provider='github').first()
+            
+            github_username = request.user.username
+            avatar_url = None
+            
+            if social_acc:
+                github_username = social_acc.extra_data.get('login', github_username)
+                avatar_url = social_acc.extra_data.get('avatar_url')
+
+            profile, created = UserProfile.objects.get_or_create(
+                user=request.user,
+                defaults={
+                    'github_username': github_username, 
+                    'avatar_url': avatar_url
+                }
+            )
+
+        #  RETURN THE DATA
+        payload = {
+            "username": request.user.username,
+            "avatar_url": profile.avatar_url,
+        }
+        serializer = SessionUserSerializer(payload)
+        return Response({"user": serializer.data})
+
+    
+# dedicated user repo view
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from brain.models import Repository
+from brain.serializers import RepositorySerializer
+
+class ConnectedReposView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user_profile = request.user.profile
+        repos = user_profile.repositories.filter(is_active=True)
+        serializer = RepositorySerializer(repos, many=True)
+        return Response(serializer.data)
