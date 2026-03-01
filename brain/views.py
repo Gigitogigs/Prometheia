@@ -12,11 +12,15 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.throttling import AnonRateThrottle
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
+from django.db import IntegrityError
 from django.db.models import F
 from allauth.socialaccount.models import SocialToken, SocialAccount
 
 from .models import Repository, UserProfile, CommitLog, JudgeEvaluation
-from .services.github_webhook_handler import verify_github_webhook
+from .services.github_webhook_handler import verify_github_webhook, generate_deterministic_webhook_secret
 from .services.github_client import create_repository_webhook, GitHubAPIError
 from .serializers import (
     RepositoryCreateSerializer,
@@ -77,7 +81,9 @@ def github_webhook(request):
         logger.warning("Webhook received for untracked or inactive repository", extra=log_extra)
         return JsonResponse({'status': 'error', 'message': f'Repository "{repo_full_name}" not configured or is inactive.'}, status=404)
 
-    if not verify_github_webhook(request.body, signature, repository.webhook_secret):
+    expected_secret = generate_deterministic_webhook_secret(repo_full_name)
+
+    if not verify_github_webhook(request.body, signature, expected_secret):
         logger.warning("GitHub webhook signature verification failed", extra=log_extra)
         return JsonResponse({'status': 'error', 'message': 'Signature verification failed.'}, status=403)
 
@@ -115,17 +121,22 @@ def github_webhook(request):
                 logger.warning("Received commit from user who is not registered. Skipping commit.", extra=commit_log_extra)
                 continue
 
-            new_commit_log = CommitLog.objects.create(
-                repository=repository,
-                author=author_profile,
-                commit_hash=commit_hash,
-                message=commit_data.get('message'),
-                timestamp=parse_datetime(commit_data.get('timestamp')),
-                url=commit_data.get('url')
-            )
-            commit_log_extra['commit_log_id'] = new_commit_log.id
-            logger.info("New commit found. Queuing for AI evaluation", extra=commit_log_extra)
-            evaluate_commit_with_ai.delay(new_commit_log.id)
+            try:
+                new_commit_log = CommitLog.objects.create(
+                    repository=repository,
+                    author=author_profile,
+                    commit_hash=commit_hash,
+                    message=commit_data.get('message'),
+                    timestamp=parse_datetime(commit_data.get('timestamp')),
+                    url=commit_data.get('url')
+                )
+                commit_log_extra['commit_log_id'] = new_commit_log.id
+                logger.info("New commit found. Queuing for AI evaluation", extra=commit_log_extra)
+                evaluate_commit_with_ai.delay(new_commit_log.id)
+            except IntegrityError:
+                # Catch race condition where duplicate webhook arrives concurrently and passes the exists() check
+                logger.warning("Ignored IntegrityError on commit creation. Likely duplicate webhook.", extra=commit_log_extra)
+                continue
 
         return JsonResponse({'status': 'accepted', 'message': 'Push event received and verified. Processing will occur asynchronously.'}, status=202)
 
@@ -191,7 +202,7 @@ class RepositoryWebhookCreateView(APIView):
                 status=status.HTTP_409_CONFLICT
             )
 
-        webhook_secret = secrets.token_hex(32)
+        webhook_secret = generate_deterministic_webhook_secret(repo_full_name)
         webhook_url = request.build_absolute_uri(reverse('github_webhook'))
 
         try:
@@ -209,7 +220,6 @@ class RepositoryWebhookCreateView(APIView):
             owner=user_profile,
             name=repo_name,
             full_name=repo_full_name,
-            webhook_secret=webhook_secret,
         )
 
         return Response(
@@ -253,6 +263,11 @@ class LeaderboardListView(ListAPIView):
     serializer_class = UserProfileSerializer
     pagination_class = LeaderboardPagination
     permission_classes = []  # Public endpoint
+    throttle_classes = [AnonRateThrottle]
+    
+    @method_decorator(cache_page(60 * 5))  # Cache leaderboard for 5 minutes
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
     
     def get_queryset(self):
         """
@@ -300,6 +315,7 @@ class UserProfileDetailView(RetrieveAPIView):
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer
     permission_classes = []  # Public endpoint
+    throttle_classes = [AnonRateThrottle]
     lookup_field = 'github_username'
     
     def get_serializer_context(self):
@@ -366,6 +382,7 @@ class CommitFeedListView(ListAPIView):
     serializer_class = CommitLogSerializer
     pagination_class = LeaderboardPagination
     permission_classes = []  # Public endpoint
+    throttle_classes = [AnonRateThrottle]
     
     def get_queryset(self):
         """Apply filters for username, repo, and processing status."""
@@ -411,6 +428,7 @@ class CommitDetailView(RetrieveAPIView):
     ).prefetch_related('evaluations')
     serializer_class = CommitLogDetailSerializer
     permission_classes = []  # Public endpoint
+    throttle_classes = [AnonRateThrottle]
     lookup_field = 'commit_hash'
 
 
@@ -440,6 +458,7 @@ class JudgeEvaluationListView(ListAPIView):
     serializer_class = JudgeEvaluationSerializer
     pagination_class = LeaderboardPagination
     permission_classes = []  # Public endpoint
+    throttle_classes = [AnonRateThrottle]
     
     def get_queryset(self):
         """Apply filters for judge type, XP range, and commit."""
@@ -497,4 +516,5 @@ class JudgeEvaluationDetailView(RetrieveAPIView):
     )
     serializer_class = JudgeEvaluationSerializer
     permission_classes = []  # Public endpoint
+    throttle_classes = [AnonRateThrottle]
 

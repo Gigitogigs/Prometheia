@@ -35,7 +35,6 @@ class Repository(models.Model):
     full_name = models.CharField(max_length=255, unique=True)
     
     # Security
-    webhook_secret = models.CharField(max_length=100, blank=True, help_text="Secret from GitHub Webhook settings")
     is_active = models.BooleanField(default=True)
     
     created_at = models.DateTimeField(auto_now_add=True)

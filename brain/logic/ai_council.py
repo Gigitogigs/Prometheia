@@ -762,6 +762,11 @@ def _call_gemini_api(judge_prompt: str, commit_message: str, raw_diff: str) -> t
         A tuple containing the awarded XP (int) and the reasoning (str).
         Returns a default baseline score on failure, as per GEMINI.md.
     """
+    
+    if not raw_diff or not raw_diff.strip():
+        # Edge case: Empty diff (e.g., just a tag push or only changed file permissions)
+        return 0, "No code changes detected in this commit."
+
     # Per GEMINI.md, we use the cost-effective 'gemini-1.5-flash' model.
     model = genai.GenerativeModel('gemini-1.5-flash')
 
@@ -797,5 +802,6 @@ Your response MUST be a single, valid JSON object. It must contain two keys:
         return data.get("xp", 10), data.get("reasoning", "Failed to parse AI reasoning.")
     except Exception as e:
         print(f"ERROR: Gemini API call failed. Reason: {e}")
-        # Per GEMINI.md (Section D.3), we gracefully degrade and award a baseline XP.
+        # Per GEMINI.md, we gracefully degrade only AFTER retries. Raise to let tasks.py handle it.
+        raise Exception(f"Failed to generate evaluation: {e}")
         return 10, f"AI evaluation failed due to an API error: {e}"

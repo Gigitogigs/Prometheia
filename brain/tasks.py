@@ -9,9 +9,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-@app.task
+@app.task(bind=True, max_retries=5)
 @opik.track(name="evaluate_commit_with_ai")
-def evaluate_commit_with_ai(commit_id: int):
+def evaluate_commit_with_ai(self, commit_id: int):
     """
     Celery task that runs the AI Council evaluations on a specific commit,
     updates the user's XP, and marks the commit as processed.
@@ -53,13 +53,26 @@ def evaluate_commit_with_ai(commit_id: int):
 
     # AI Council Evaluation
     council_start_time = time.time()
-    architect_eval = judge_architect(commit_log)
-    paladin_eval = judge_paladin(commit_log)
-    scribe_eval = judge_scribe(commit_log)
+    try:
+        architect_eval = judge_architect(commit_log)
+        paladin_eval = judge_paladin(commit_log)
+        scribe_eval = judge_scribe(commit_log)
+    except Exception as e:
+        log_extra['error'] = str(e)
+        logger.error("Error during AI evaluation.", extra=log_extra)
+        try:
+            # Exponential backoff: 2^retry_count * 10 seconds (10s, 20s, 40s, 80s, 160s)
+            raise self.retry(exc=e, countdown=10 * (2 ** self.request.retries))
+        except self.MaxRetriesExceededError:
+            logger.error("Max retries exceeded for AI evaluation. Awarding baseline XP.", extra=log_extra)
+            # Graceful degradation per GEMINI.md (Section D.3)
+            architect_eval = type('obj', (object,), {'xp_awarded': 10, 'reasoning': 'API failed'})()
+            paladin_eval = type('obj', (object,), {'xp_awarded': 10, 'reasoning': 'API failed'})()
+            scribe_eval = type('obj', (object,), {'xp_awarded': 10, 'reasoning': 'API failed'})()
+
     council_latency = time.time() - council_start_time
     log_extra['council_latency'] = council_latency
     logger.info("AI council evaluation finished.", extra=log_extra)
-
 
     if commit_log.author:
         try:
@@ -78,7 +91,12 @@ def evaluate_commit_with_ai(commit_id: int):
             logger.exception("Error updating user XP.", extra=log_extra)
             raise e
     else:
-        total_xp = architect_eval.xp_awarded + paladin_eval.xp_awarded + scribe_eval.xp_awarded
+        total_xp = XPCalculator.calculate_total_xp(
+            architect_score=architect_eval.xp_awarded,
+            paladin_score=paladin_eval.xp_awarded,
+            scribe_score=scribe_eval.xp_awarded,
+            current_streak=1 # Default streak for unlinked commits
+        )
         commit_log.total_xp_awarded = total_xp
         commit_log.is_processed = True
         commit_log.save(update_fields=['total_xp_awarded', 'is_processed'])

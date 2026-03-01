@@ -1,5 +1,17 @@
 import hmac
 import hashlib
+from django.conf import settings
+
+def generate_deterministic_webhook_secret(repo_full_name: str) -> str:
+    """
+    Generate a deterministic webhook secret for a repository using HMAC-SHA256
+    and the Django SECRET_KEY as the cryptographic key.
+    
+    This avoids storing the webhook secret in the database.
+    """
+    key = settings.SECRET_KEY.encode('utf-8')
+    message = repo_full_name.encode('utf-8')
+    return hmac.new(key, message, hashlib.sha256).hexdigest()
 
 def verify_github_webhook(payload_raw: bytes, signature: str, secret: str) -> bool:
     """

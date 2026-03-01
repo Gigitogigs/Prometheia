@@ -45,10 +45,7 @@ elif DEBUG:
     ]
 
 
-# For secure POST requests, Django checks the Origin header.
-CSRF_TRUSTED_ORIGINS = [
-    'https://uninterleaved-cheree-merciful.ngrok-free.dev'
-]
+
 
 
 
@@ -181,8 +178,6 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-
 # Third-party API Keys
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
@@ -223,3 +218,4 @@ if OPIK_ENABLED and OPIK_API_KEY:
         api_key=OPIK_API_KEY,
         workspace=OPIK_WORKSPACE
     )
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
