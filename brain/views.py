@@ -300,177 +300,176 @@ class LeaderboardListView(ListAPIView):
 class UserProfileDetailView(RetrieveAPIView):
     """
     GET /api/users/{github_username}/
-    
-    Returns detailed profile for a specific user.
-    
-    Includes:
-    - All user stats (XP, level, streak, avatar)
-    - Recent commits (last 5)
-    - XP progression info
-    - Current rank on leaderboard
-    
+
+    Returns a public profile for a specific user — aggregate stats only.
+    Commit details are NEVER included here to protect private/work repo data.
+
+    If the requesting user is viewing their OWN profile while authenticated,
+    a summary of their recent commit activity (count and XP only, no messages
+    or repo names) is appended for their dashboard convenience.
+
+    Includes (public):
+    - XP, level, streak, avatar, title, rank
+
+    Includes (own profile + authenticated only):
+    - total_commits count
+    - recent_xp_events: list of {xp_awarded, timestamp} (no messages/repos)
+
     Example:
     GET /api/users/john_doe/
     """
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer
-    permission_classes = []  # Public endpoint
+    permission_classes = []  # Public endpoint — aggregate stats only
     throttle_classes = [AnonRateThrottle]
     lookup_field = 'github_username'
-    
+
     def get_serializer_context(self):
-        """Inject rank into serializer context."""
+        """Inject leaderboard rank into serializer context."""
         context = super().get_serializer_context()
-        
-        # Calculate rank
         user = self.get_object()
         rank = UserProfile.objects.filter(
             total_xp__gt=user.total_xp
         ).count() + 1
-        
         context['rank'] = rank
         return context
-    
+
     def retrieve(self, request, *args, **kwargs):
-        """Return user profile with rank and recent activity."""
+        """Return public aggregate profile with XP activity history.
+
+        XP events (timestamps + amounts only) are public for all viewers —
+        like GitHub's contribution graph, they show activity cadence without
+        revealing any private repo names or commit messages.
+        """
         response = super().retrieve(request, *args, **kwargs)
-        
         user = self.get_object()
-        
-        # Add recent commits
-        recent_commits = CommitLog.objects.filter(
-            author=user
-        ).order_by('-timestamp')[:5]
-        
-        response.data['recent_commits'] = CommitLogSerializer(
-            recent_commits,
-            many=True,
-            context={'request': request}
-        ).data
-        
-        # Add total commits
+
+        # Total commit count — public, reveals nothing sensitive
         response.data['total_commits'] = CommitLog.objects.filter(author=user).count()
-        
+
+        # XP activity history — timestamps and XP only, NO repo names or commit messages.
+        # Public by design: lets other devs see how someone has been progressing,
+        # similar to GitHub's green contribution map.
+        xp_history = (
+            CommitLog.objects
+            .filter(author=user, is_processed=True)
+            .order_by('-timestamp')
+            .values('timestamp', 'total_xp_awarded')[:90]  # Last 90 events (~3 months)
+        )
+        response.data['xp_history'] = list(xp_history)
+
         return response
 
 
 class CommitFeedListView(ListAPIView):
     """
     GET /api/commits/
-    
-    Returns recent commits from all users, sorted by timestamp.
-    
+
+    Returns the authenticated user's own commits only.
+    Commit messages, diffs, and repository names are private — never exposed
+    publicly, even to other authenticated users, to protect private/work repos.
+
     Query parameters:
     - page: Page number (default 1)
     - page_size: Results per page (default 20)
     - is_processed: Filter by processing status (true/false)
-    - username: Filter by commit author
-    - repo: Filter by repository name
-    
-    Response includes:
-    - Commit metadata (hash, message, timestamp)
-    - Author and repository info
-    - Judge evaluations count
-    - Processing status and total XP
-    
+    - repo: Filter by repository name (within own repos only)
+
     Example:
-    GET /api/commits/?page=1&is_processed=true&username=john_doe
+    GET /api/commits/?page=1&is_processed=true
     """
-    queryset = CommitLog.objects.select_related(
-        'author', 'repository'
-    ).prefetch_related('evaluations').order_by('-timestamp')
     serializer_class = CommitLogSerializer
     pagination_class = LeaderboardPagination
-    permission_classes = []  # Public endpoint
+    permission_classes = [IsAuthenticated]  # 🔒 Auth required — owner-only data
     throttle_classes = [AnonRateThrottle]
-    
+
     def get_queryset(self):
-        """Apply filters for username, repo, and processing status."""
+        """Return only commits authored by the requesting user."""
         queryset = CommitLog.objects.select_related(
             'author', 'repository'
-        ).prefetch_related('evaluations').order_by('-timestamp')
-        
+        ).prefetch_related('evaluations').filter(
+            author__user=self.request.user  # 🔒 Strict owner filter
+        ).order_by('-timestamp')
+
         # Filter by processing status
         is_processed = self.request.query_params.get('is_processed')
         if is_processed is not None:
             queryset = queryset.filter(is_processed=is_processed.lower() == 'true')
-        
-        # Filter by author username
-        username = self.request.query_params.get('username')
-        if username:
-            queryset = queryset.filter(author__github_username=username)
-        
-        # Filter by repository
+
+        # Filter by repository (within own repos only)
         repo = self.request.query_params.get('repo')
         if repo:
             queryset = queryset.filter(repository__full_name__icontains=repo)
-        
+
         return queryset
 
 
 class CommitDetailView(RetrieveAPIView):
     """
     GET /api/commits/{commit_hash}/
-    
+
     Returns detailed information about a specific commit.
-    
+    Only accessible by the commit's author — raw diffs and commit messages
+    from private/work repos must never be exposed to other users.
+
     Includes:
     - Full commit metadata
     - Raw diff (for code review)
     - All AI judge evaluations with Opik trace links
     - Processing status
-    
+
     Example:
     GET /api/commits/a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6/
     """
-    queryset = CommitLog.objects.select_related(
-        'author', 'repository'
-    ).prefetch_related('evaluations')
     serializer_class = CommitLogDetailSerializer
-    permission_classes = []  # Public endpoint
+    permission_classes = [IsAuthenticated]  # 🔒 Auth required — owner-only data
     throttle_classes = [AnonRateThrottle]
     lookup_field = 'commit_hash'
+
+    def get_queryset(self):
+        """Scope queryset to the requesting user's commits only."""
+        return CommitLog.objects.select_related(
+            'author', 'repository'
+        ).prefetch_related('evaluations').filter(
+            author__user=self.request.user  # 🔒 Strict owner filter
+        )
 
 
 class JudgeEvaluationListView(ListAPIView):
     """
     GET /api/evaluations/
-    
-    Returns all AI judge evaluations.
-    
+
+    Returns AI judge evaluations for the authenticated user's commits only.
+    Evaluation reasoning may contain details from private/work repo diffs,
+    so access is strictly limited to the commit's author.
+
     Query parameters:
     - judge: Filter by judge type (ARCHITECT, PALADIN, SCRIBE)
     - min_xp: Minimum XP awarded
     - max_xp: Maximum XP awarded
-    - commit: Filter by commit hash
-    
-    Response includes:
-    - Judge type and XP awarded
-    - Detailed reasoning (markdown)
-    - Opik trace proof_url
-    
+    - commit: Filter by commit hash (within own commits)
+
     Example:
     GET /api/evaluations/?judge=ARCHITECT&min_xp=70
     """
-    queryset = JudgeEvaluation.objects.select_related(
-        'commit', 'commit__author', 'commit__repository'
-    ).order_by('-created_at')
     serializer_class = JudgeEvaluationSerializer
     pagination_class = LeaderboardPagination
-    permission_classes = []  # Public endpoint
+    permission_classes = [IsAuthenticated]  # 🔒 Auth required — owner-only data
     throttle_classes = [AnonRateThrottle]
-    
+
     def get_queryset(self):
-        """Apply filters for judge type, XP range, and commit."""
+        """Return evaluations only for commits owned by the requesting user."""
         queryset = JudgeEvaluation.objects.select_related(
             'commit', 'commit__author', 'commit__repository'
+        ).filter(
+            commit__author__user=self.request.user  # 🔒 Strict owner filter
         ).order_by('-created_at')
-        
+
         # Filter by judge type
         judge = self.request.query_params.get('judge')
         if judge in ['ARCHITECT', 'PALADIN', 'SCRIBE']:
             queryset = queryset.filter(judge_type=judge)
-        
+
         # Filter by XP range
         min_xp = self.request.query_params.get('min_xp')
         if min_xp:
@@ -478,43 +477,47 @@ class JudgeEvaluationListView(ListAPIView):
                 queryset = queryset.filter(xp_awarded__gte=int(min_xp))
             except ValueError:
                 pass
-        
+
         max_xp = self.request.query_params.get('max_xp')
         if max_xp:
             try:
                 queryset = queryset.filter(xp_awarded__lte=int(max_xp))
             except ValueError:
                 pass
-        
-        # Filter by commit hash
+
+        # Filter by commit hash (within own commits only)
         commit = self.request.query_params.get('commit')
         if commit:
             queryset = queryset.filter(commit__commit_hash__istartswith=commit)
-        
+
         return queryset
 
 
 class JudgeEvaluationDetailView(RetrieveAPIView):
     """
     GET /api/evaluations/{id}/
-    
+
     Returns detailed information about a specific judge evaluation.
-    
+    Only accessible by the commit's author — reasoning contains AI analysis
+    of the raw diff which may expose private/work code context.
+
     Includes:
     - Judge type and full reasoning
     - Related commit and author
     - Opik trace proof_url (link to AI's reasoning dashboard)
-    
-    This endpoint is useful for understanding the "why" behind each evaluation.
-    Click the proof_url to see the full AI reasoning on Opik dashboard.
-    
+
     Example:
     GET /api/evaluations/42/
     """
-    queryset = JudgeEvaluation.objects.select_related(
-        'commit', 'commit__author', 'commit__repository'
-    )
     serializer_class = JudgeEvaluationSerializer
-    permission_classes = []  # Public endpoint
+    permission_classes = [IsAuthenticated]  # 🔒 Auth required — owner-only data
     throttle_classes = [AnonRateThrottle]
+
+    def get_queryset(self):
+        """Scope queryset to evaluations on the requesting user's commits only."""
+        return JudgeEvaluation.objects.select_related(
+            'commit', 'commit__author', 'commit__repository'
+        ).filter(
+            commit__author__user=self.request.user  # 🔒 Strict owner filter
+        )
 
